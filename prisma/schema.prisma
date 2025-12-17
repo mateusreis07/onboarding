@@ -1,0 +1,402 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  OVERDUE
+}
+
+enum TaskType {
+  CHECKLIST
+  DOCUMENT_UPLOAD
+  TRAINING
+  FORM
+}
+
+model User {
+  id         String    @id @default(cuid())
+  name       String?
+  email      String    @unique
+  password   String? // For credentials auth
+  image      String?
+  role       String    @default("EMPLOYEE")
+  jobTitle   String?
+  department String?
+  startDate  DateTime?
+
+  // Relations
+  managerId String?
+  manager   User?   @relation("ManagerToEmployee", fields: [managerId], references: [id])
+  employees User[]  @relation("ManagerToEmployee")
+
+  // Buddy System
+  buddyId String?
+  buddy   User?   @relation("BuddyToEmployee", fields: [buddyId], references: [id])
+  buddies User[]  @relation("BuddyToEmployee")
+
+  onboarding        UserOnboarding?
+  documents         Document[]
+  notifications     Notification[]
+  trainings         UserTraining[]
+  policyAcceptances UserPolicyAcceptance[]
+  calendarEvents    CalendarEvent[]
+
+  receivedFeedbacks Feedback[] @relation("ReceivedFeedback")
+  givenFeedbacks    Feedback[] @relation("GivenFeedback")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model OnboardingTemplate {
+  id          String  @id @default(cuid())
+  title       String
+  description String?
+  jobTitle    String? // Optional: specific to a job title
+  department  String? // Optional: specific to a department
+
+  tasks TemplateTask[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TemplateTask {
+  id         String             @id @default(cuid())
+  templateId String
+  template   OnboardingTemplate @relation(fields: [templateId], references: [id])
+
+  title       String
+  description String?
+  type        TaskType @default(CHECKLIST)
+
+  dueDayOffset Int     @default(0) // Days after start date
+  assigneeRole String? // Who is responsible (e.g., IT, Manager, or Self/Employee)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model UserOnboarding {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id])
+
+  status   String @default("IN_PROGRESS") // IN_PROGRESS, COMPLETED
+  progress Int    @default(0) // Percentage
+
+  tasks UserTask[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model UserTask {
+  id           String         @id @default(cuid())
+  onboardingId String
+  onboarding   UserOnboarding @relation(fields: [onboardingId], references: [id])
+
+  title       String
+  description String?
+  status      TaskStatus @default(PENDING)
+  type        TaskType
+
+  dueDate     DateTime?
+  completedAt DateTime?
+
+  assigneeRole String? // Who is responsible (e.g., IT, Manager, or Self/Employee)
+
+  // If it was instantiated from a template task
+  originalTemplateTaskId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Document {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  title  String
+  url    String
+  type   String? // e.g. "Passport", "Contract"
+  status String  @default("PENDING") // PENDING, APPROVED, REJECTED
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Notification {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  title   String
+  message String
+  read    Boolean @default(false)
+  type    String  @default("INFO") // INFO, WARNING, REMINDER
+  link    String?
+
+  createdAt DateTime @default(now())
+}
+
+enum FeedbackType {
+  DAY_7
+  DAY_30
+  DAY_90
+}
+
+model Feedback {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation("ReceivedFeedback", fields: [userId], references: [id])
+
+  evaluatorId String
+  evaluator   User   @relation("GivenFeedback", fields: [evaluatorId], references: [id])
+
+  type FeedbackType
+
+  content String // Stores JSON string of Q&A
+
+  // AI Analysis
+  aiSummary String?
+  sentiment String? // POSITIVE, NEUTRAL, NEGATIVE
+  score     Int? // 0-100
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, type])
+}
+
+model TrainingCourse {
+  id          String  @id @default(cuid())
+  title       String
+  description String?
+  coverImage  String?
+  role        String? // If specific to a role (Learning Path)
+
+  modules TrainingModule[]
+
+  userProgress UserTraining[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TrainingModule {
+  id       String         @id @default(cuid())
+  courseId String
+  course   TrainingCourse @relation(fields: [courseId], references: [id])
+
+  title    String
+  content  String? // Markdown or HTML
+  videoUrl String?
+  order    Int     @default(0)
+
+  quiz TrainingQuiz?
+}
+
+model TrainingQuiz {
+  id       String         @id @default(cuid())
+  moduleId String         @unique
+  module   TrainingModule @relation(fields: [moduleId], references: [id])
+
+  questions Question[]
+}
+
+model Question {
+  id     String       @id @default(cuid())
+  quizId String
+  quiz   TrainingQuiz @relation(fields: [quizId], references: [id])
+
+  text          String
+  options       String // JSON string: ["Option A", "Option B"]
+  correctAnswer Int // Index of correct option
+}
+
+model UserTraining {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  courseId String
+  course   TrainingCourse @relation(fields: [courseId], references: [id])
+
+  status         String  @default("IN_PROGRESS") // IN_PROGRESS, COMPLETED
+  progress       Int     @default(0)
+  certificateUrl String?
+
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([userId, courseId])
+}
+
+model Policy {
+  id        String  @id @default(cuid())
+  title     String
+  content   String // HTML or Markdown text
+  mandatory Boolean @default(true)
+  version   String  @default("1.0")
+  isActive  Boolean @default(true)
+
+  acceptances UserPolicyAcceptance[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model UserPolicyAcceptance {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  policyId String
+  policy   Policy @relation(fields: [policyId], references: [id])
+
+  acceptedAt DateTime @default(now())
+  ipAddress  String?
+  userAgent  String?
+
+  @@unique([userId, policyId])
+}
+
+enum EventType {
+  ONBOARDING_MEETING
+  ONE_ON_ONE
+  TEAM_INTEGRATION
+  TRAINING_SESSION
+  CUSTOM
+}
+
+model EventTemplate {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  eventType   EventType @default(CUSTOM)
+
+  // Scheduling
+  dayOffset       Int @default(0) // Days after start date
+  startHour       Int @default(9) // Hour (0-23)
+  startMinute     Int @default(0) // Minute (0-59)
+  durationMinutes Int @default(60) // Duration in minutes
+
+  location              String?
+  meetingUrl            String?
+  reminderMinutesBefore Int     @default(30)
+
+  // Role-based assignment
+  role      String? // If null, applies to all
+  mandatory Boolean @default(true)
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CalendarEvent {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  title       String
+  description String?
+  eventType   EventType @default(CUSTOM)
+
+  startTime  DateTime
+  endTime    DateTime
+  location   String?
+  meetingUrl String?
+
+  // External Calendar Integration
+  googleEventId  String?
+  outlookEventId String?
+
+  // Reminders
+  reminderSent          Boolean @default(false)
+  reminderMinutesBefore Int     @default(30)
+
+  completed Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum ResourceCategory {
+  MANUAL
+  POLICY
+  VIDEO
+  FAQ
+}
+
+model LibraryResource {
+  id       String           @id @default(cuid())
+  category ResourceCategory
+  title    String
+  content  String?
+  url      String?
+  metadata String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model RolePermission {
+  id         String @id @default(cuid())
+  role       String
+  permission String
+
+  createdAt DateTime @default(now())
+
+  @@unique([role, permission])
+}
+
+// Dynamic Management Tables
+model SystemRole {
+  id          String  @id @default(cuid())
+  code        String  @unique // e.g., "HR", "MANAGER"
+  label       String // e.g., "Recursos Humanos"
+  description String?
+  isActive    Boolean @default(true)
+  isSystem    Boolean @default(false) // Cannot be deleted if true
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SystemDepartment {
+  id          String  @id @default(cuid())
+  code        String  @unique // e.g., "ENGINEERING"
+  label       String // e.g., "Engenharia"
+  description String?
+  isActive    Boolean @default(true)
+  isSystem    Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SystemJobTitle {
+  id          String  @id @default(cuid())
+  code        String  @unique // e.g., "DESENVOLVEDOR_JUNIOR"
+  label       String // e.g., "Desenvolvedor Júnior"
+  category    String? // e.g., "Engenharia"
+  description String?
+  isActive    Boolean @default(true)
+  isSystem    Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
