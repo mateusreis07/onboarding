@@ -1,4 +1,4 @@
-# Sistema Inteligente de Onboarding Corporativo.
+# Sistema Inteligente de Onboarding Corporativo
 
 Sistema completo de gerenciamento de onboarding de colaboradores construído com Next.js, Prisma e PostgreSQL.
 
