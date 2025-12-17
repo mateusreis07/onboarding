@@ -11,6 +11,7 @@ const updateUserSchema = z.object({
   department: z.string().optional().nullable(),
   jobTitle: z.string().optional().nullable(),
   managerId: z.string().nullable().optional(),
+  buddyId: z.string().nullable().optional(),
 })
 
 const assignTemplateSchema = z.object({
@@ -44,6 +45,12 @@ export async function PATCH(
       }
     }
 
+    // Get current user to check if buddy changed
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { buddyId: true }
+    })
+
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: {
@@ -53,12 +60,27 @@ export async function PATCH(
         department: body.department,
         jobTitle: body.jobTitle,
         managerId: body.managerId === "none" ? null : body.managerId,
+        buddyId: body.buddyId === "none" ? null : body.buddyId,
       },
       include: {
         manager: { select: { name: true } },
+        buddy: { select: { id: true, name: true } },
         onboarding: { select: { status: true, progress: true } }
       }
     })
+
+    // Notify new Buddy if changed
+    if (body.buddyId && body.buddyId !== "none" && body.buddyId !== currentUser?.buddyId) {
+      await prisma.notification.create({
+        data: {
+          userId: body.buddyId,
+          title: "Você tem um novo afilhado!",
+          message: `Você foi designado como Padrinho de ${updatedUser.name}. Acompanhe o progresso dele no seu painel.`,
+          type: "INFO",
+          link: `/dashboard/employees`
+        }
+      })
+    }
 
     return NextResponse.json(updatedUser)
   } catch (error) {

@@ -39,6 +39,12 @@ export default async function DashboardPage() {
             onboarding: {
                 include: {
                     tasks: {
+                        where: {
+                            OR: [
+                                { assigneeRole: "EMPLOYEE" },
+                                { assigneeRole: null }
+                            ]
+                        },
                         select: {
                             id: true,
                             title: true,
