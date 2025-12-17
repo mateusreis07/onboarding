@@ -36,6 +36,16 @@ export function MenteeList({ mentees }: MenteeListProps) {
     setIsOpen(true)
   }
 
+  const calculateProgress = (tasks: { status: string }[] | undefined) => {
+    if (!tasks || tasks.length === 0) return 0
+    const completed = tasks.filter(t => t.status === 'COMPLETED').length
+    return Math.round((completed / tasks.length) * 100)
+  }
+
+  const selectedProgress = selectedMentee?.onboarding?.tasks
+    ? calculateProgress(selectedMentee.onboarding.tasks)
+    : 0
+
   return (
     <>
       <Card>
@@ -46,32 +56,38 @@ export function MenteeList({ mentees }: MenteeListProps) {
           <CardDescription>Clique para ver detalhes do andamento.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {mentees.map(mentee => (
-            <div
-              key={mentee.id}
-              className="p-3 bg-blue-50 rounded-lg border border-blue-100 cursor-pointer hover:bg-blue-100 transition-colors"
-              onClick={() => handleMenteeClick(mentee)}
-            >
-              <div className="flex justify-between items-start mb-2">
-                <div>
-                  <p className="font-semibold text-blue-900">{mentee.name}</p>
-                  <p className="text-xs text-blue-600">{mentee.email}</p>
+          {mentees.map(mentee => {
+            const progress = mentee.onboarding?.tasks
+              ? calculateProgress(mentee.onboarding.tasks)
+              : 0
+
+            return (
+              <div
+                key={mentee.id}
+                className="p-3 bg-blue-50 rounded-lg border border-blue-100 cursor-pointer hover:bg-blue-100 transition-colors"
+                onClick={() => handleMenteeClick(mentee)}
+              >
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <p className="font-semibold text-blue-900">{mentee.name}</p>
+                    <p className="text-xs text-blue-600">{mentee.email}</p>
+                  </div>
+                  <span className="text-xs font-bold bg-blue-200 text-blue-800 px-2 py-1 rounded-full">
+                    {progress}%
+                  </span>
                 </div>
-                <span className="text-xs font-bold bg-blue-200 text-blue-800 px-2 py-1 rounded-full">
-                  {mentee.onboarding?.progress || 0}%
-                </span>
+                <div className="w-full bg-blue-200 rounded-full h-1.5 mt-2">
+                  <div
+                    className="bg-blue-600 h-1.5 rounded-full"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+                <p className="text-xs text-blue-500 mt-2 text-right">
+                  {mentee.onboarding?.status === 'COMPLETED' ? 'Concluído' : 'Em andamento'}
+                </p>
               </div>
-              <div className="w-full bg-blue-200 rounded-full h-1.5 mt-2">
-                <div
-                  className="bg-blue-600 h-1.5 rounded-full"
-                  style={{ width: `${mentee.onboarding?.progress || 0}%` }}
-                />
-              </div>
-              <p className="text-xs text-blue-500 mt-2 text-right">
-                {mentee.onboarding?.status === 'COMPLETED' ? 'Concluído' : 'Em andamento'}
-              </p>
-            </div>
-          ))}
+            )
+          })}
         </CardContent>
       </Card>
 
@@ -89,12 +105,12 @@ export function MenteeList({ mentees }: MenteeListProps) {
               <div className="space-y-2">
                 <div className="flex justify-between text-sm font-medium">
                   <span>Progresso Geral</span>
-                  <span>{selectedMentee.onboarding.progress}%</span>
+                  <span>{selectedProgress}%</span>
                 </div>
                 <div className="w-full bg-secondary rounded-full h-2">
                   <div
                     className="bg-primary h-2 rounded-full transition-all"
-                    style={{ width: `${selectedMentee.onboarding.progress}%` }}
+                    style={{ width: `${selectedProgress}%` }}
                   />
                 </div>
               </div>
